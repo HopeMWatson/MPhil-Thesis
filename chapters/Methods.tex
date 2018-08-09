@@ -1,0 +1,82 @@
+\section{Simulations}
+\subsection{Why use Simulations?}
+Simulations are the gold standard in evaluating methodologies relevant to causal variants. In the "real-world", that is genotyping for actual phenotypes of interest (typically a disease), we do not know the causal variant. It is not possible evaluate both real-world data and the robustness of the methodology simultaneously. This is because the lack of certainty and variability of both parameters may be the reason for the outcomes; a basic concept of the scientific method -- test one variable at a time and hold all other variables the same as controls. 
+
+\subsection{Running Simulations}
+
+Simulations were run by through a series of steps, leveraging relevant available R packages. Full code described here is available on: \url{https://github.com/HopeMWatson/credibleset_thesis}
+
+The libraries utilised in this analysis were devtools to load the simGWAS and coloc packages directly from github. ggplot2 package was used to produce figures. 
+
+\section{Functions and Packages}
+\subsection{simGWAS - Generating p-values}
+The simGWAS package directly simulates GWAS summary data, without individual data as an intermediate step. The expected statistics are mathematically derived for any set of causal variants and their effects sizes, conditional upon control haplotype frequencies \cite{Fortune2018}. The arguments for simGWAS to run require a specification of the causal SNP, its effect size (OR), and allele (MAF) and haplotypes frequencies. simGWAS then produce simulated z-scores for each SNP. A list of z-scores was created for each SNP by running the simulation 100 times. The final output from simGWAS was a 100x100 matrix, which contained data on 100 SNPs with 100 z-scores. The z-scores were turned into p-values. 
+
+\subsection{Finemap.abf - Generating posterior probabilities} 
+From the assigned p-values, posterior probabilities are calculated. This process was outlined above, showing how approximate bayes factors (ABF) are created from the observed data and the uninformative prior. The finemap.abf function works on summary statistic data, inputs as either 1) p-values, as used here or 2) coefficients and coefficient variance. Other functions in the coloc package can be utilised for full genotyped data with different statistical approaches. 
+
+The finemap.abf function works by specifying input arguments for 1) p-values 2) sample size 3) MAF 4) ratio of cases to controls (s), and 5) type =cc. The prior is set to p=1e-04 as a default for an uninformative prior. An empty matrix was created in to map each to place each posterior probability into the list back into the data frame. The finemap.abf function was then looped over each SNP and its respective list of p-values to create posterior probabilities. The final output from finemap.abf was a 100x100 matrix, which contained data on 100 SNPs with 100 respective posterior probabilities of the SNP being the specified causal variant. 
+
+\subsection{Credset - Generating Credible Set}
+The credset function produced a credible set based upon the desired threshold. The threshold represents the \textit{cumulative} posterior probabilities \textit{in the original sorting generated} to reach or \textit{exceed} the threshold value. In the cases of exceeding the threshold, this is because the a SNP's posterior probability is necessary to reach the threshold, but large enough to exceed it, where "overshooting" occurs. 
+
+Credset analyses both ordered and not ordered methods. The ordered methods first sort by descending posterior probabilities, then takes the cumulative probability to reach the threshold. Not ordered keeps the original sorting of how the posterior probabilities were generated and uses the seq\_along function to take the all posterior probabilities of the SNPs until the threshold is reached. This returns the credible set - a set of candidate SNPs  contains the causal variant with a pre-specified probability. 
+
+Credset produces a credible set for \textit{one simulation}. The cumulative posterior probabilities is the size. There is no interpretation of coverage for one credible set, since there is only one simulation and coverage is by definition analysis under a repeated process. However, the variable \textbf{contained} is defined as if the causal variant was in the the credible set. For one \textit{repetition} (nrep=1) of one simulation contained takes on the value of 0 - the causal variant was not in the credible set or 1 - the causal variant is in the credible set. If nrep=10, the possible values for one reptition of the simulation would be 0.1 if causal variant is in the credible set or 0 if not. 
+
+Contained is related but markedly different from coverage. Contained still only addresses one credible set, even if the simulation for that same credible set is run x number of times (nrep=x). Coverage addresses a number of credible sets. Coverage is calculated by taking the values for contained over the list of credible sets analysed. 
+
+\subsection{Wrapper - Size and Coverage}
+While credset analyses one simulation, the wrapper function applies the credset across multiple simulations. This returns the probabilities - average size and coverage of a list of credible sets. 
+
+Size and coverage is reported for both ordered and not ordered sets.
+
+
+\subsection{Quantifying Disorder}
+\textbf{Disorder} was mathematically defined as:
+
+\begin{equation}
+    disorder = -sum(log(pp))
+\end{equation}
+
+Disorder is not ordering dependent, that is the disorder of a system is constant for the determined set of credible SNPs \ref{Visualising Disorder in a Credible Set} explores this further. 
+
+
+The mathematical term for entropy was \textit{not} chosen due to the extraneous values that approach infinity and negative infinity when multiplying values over a distribution. 
+Where $entropy = -sum(pp*log(pp))$.
+
+The goal of measuring disorder is to provide a statistical annotation that allows us to have more confidence that the causal variant is contained in the credible set, when candidate SNP(s) have much higher posterior probabilities than the entire full set of SNPs being tested. 
+
+\subsubsection{Visualising Disorder in a Credible Set} \label{Visualising Disorder in a Credible Set}
+To demonstrate how disorder varies in a credible set, we give a visual example with 10 hypothetical SNPs. 
+
+In this first diagram there is no disorder in the system. It is a uniform distribution, where all SNPs share the same posterior probabilities. Each SNP is equally likely (or unlikely) to be the causal variant. 
+
+
+The second diagram shows medium disorder where there is a SNP with a large posterior probability - the lead SNP, in addition to SNPs in high LD with the lead SNP. Determining which of the candidate SNPs is the true causal variant is difficult, as multiple SNPs appear good candidates. This is the scenario that occurs almost always in real world data, and is the focus of fine mapping. 
+
+The third diagram shows a system with very high disorder, where the lead SNP accounts for almost all of the cumulative posterior probability. In this situation we can safely infer this is \emph{the} causal variant. Most associations with this degree of strength have already biologically defined and well studied. 
+
+\begin{figure}
+    \centering
+    \includegraphics{images}
+    \caption{Caption}
+    \label{fig:my_label}
+\end{figure}
+Finally, we see if we mixed up the order of the SNPs, it does not change the amount of disorder captured. 
+
+
+\subsection{Wrapper2} \label{Wrapper2}
+Wrapper2 generates a  credible sets under different conditions of odds ratio (OR) and sample size number (n), with a specified threshold. The credible set produced can take on any combination of OR=1.0, 1.05, 1.1, 1.2, 1.3 and the n=1000-5000 in increments of 1000. The simultaneous combinations allow analysis of how the property of disorder effects the number of variants (nvar) in a credible set. This is explored in the results section \ref{System Disorder and Coverage}. 
+
+\subsection{Covent}
+Covent is both the function that replicates wrapper2 to create a loop to generate more simulations and is the data produced from the simulations. a view of the data can be found in \ref{Sample Data_Cov Dis}. 
+
+For the specified number of replications, the data created are replicated for \emph{both} cases and controls. Therefore, if 1000 replications are specified, there will be 2000 total simulations, 1000 case simulations and 1000 control simulations. 
+
+\subsection{Logistic Regression Testing}
+Significance testing for disorder was conducted using logistic regression and compared in order versus not ordered sets. 
+
+
+
+%Have some sort of illustration here to tie all the steps together 
